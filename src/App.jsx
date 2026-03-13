@@ -334,12 +334,17 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats clickeables */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}}>
-        {[{label:"Activas",value:activas.length,color:C.forest},{label:"Pagaron",value:pagados,color:"#5a9e6a"},{label:"Deben",value:activas.length-pagados,color:"#c0784a"},{label:"Bajas",value:bajas.length,color:"#aaa"}].map(s=>(
-          <div key={s.label} style={{background:"white",borderRadius:14,padding:"12px 6px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-            <div style={{fontSize:24,fontWeight:900,color:s.color}}>{s.value}</div>
-            <div style={{fontSize:11,color:"#aaa",fontWeight:600,marginTop:2}}>{s.label}</div>
+        {[
+          {key:"todos",label:"Activas",value:activas.length,color:C.forest,action:()=>{setVerBajas(false);setFilter("todos");}},
+          {key:"pagados",label:"Pagaron",value:pagados,color:"#5a9e6a",action:()=>{setVerBajas(false);setFilter("pagados");}},
+          {key:"pendientes",label:"Deben",value:activas.length-pagados,color:"#c0784a",action:()=>{setVerBajas(false);setFilter("pendientes");}},
+          {key:"bajas",label:"Bajas",value:bajas.length,color:"#aaa",action:()=>{setVerBajas(true);setFilter("todos");}},
+        ].map(s=>(
+          <div key={s.key} onClick={s.action} style={{background:(s.key==="bajas"?verBajas:!verBajas&&filter===s.key)?s.color:"white",borderRadius:14,padding:"12px 6px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",cursor:"pointer",border:`2px solid ${(s.key==="bajas"?verBajas:!verBajas&&filter===s.key)?s.color:"transparent"}`}}>
+            <div style={{fontSize:24,fontWeight:900,color:(s.key==="bajas"?verBajas:!verBajas&&filter===s.key)?"white":s.color}}>{s.value}</div>
+            <div style={{fontSize:11,fontWeight:600,marginTop:2,color:(s.key==="bajas"?verBajas:!verBajas&&filter===s.key)?"rgba(255,255,255,0.85)":"#aaa"}}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -554,9 +559,12 @@ function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
   const [form,setForm]=useState({dia:"Lunes",hora:"",profesora:"Azu",capacidad:6});
   const [editForm,setEditForm]=useState({dia:"Lunes",hora:"",profesora:"",capacidad:6});
 
+  const [filterTurno,setFilterTurno]=useState("todos");
   const ocupacion=id=>alumnos.filter(a=>a.turno_id===id).length;
   const turnosPorDia=useMemo(()=>{const m={};DIAS_ORDEN.forEach(d=>{m[d]=turnos.filter(t=>t.dia===d);});return m;},[turnos]);
   const totalLugares=turnos.reduce((a,t)=>a+t.capacidad,0);
+  const completos=turnos.filter(t=>ocupacion(t.id)>=t.capacidad).length;
+  const conLugar=turnos.filter(t=>ocupacion(t.id)<t.capacidad).length;
 
   const addTurno=async()=>{if(!form.hora.trim())return;setSaving(true);await supabase.from("turnos").insert({dia:form.dia,hora:form.hora,profesora:form.profesora,capacidad:Number(form.capacidad)});await onRefresh();setSaving(false);setForm({dia:"Lunes",hora:"",profesora:"Azu",capacidad:6});setModalAdd(false);};
   const delTurno=async(id)=>{setSaving(true);await supabase.from("turnos").delete().eq("id",id);await onRefresh();setSaving(false);setModalDet(null);};
@@ -570,10 +578,10 @@ function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
   return (
     <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
-        {[{label:"Lugares totales",value:totalLugares,color:C.forest},{label:"Ocupados",value:alumnos.length,color:"#c0784a"},{label:"Disponibles",value:Math.max(0,totalLugares-alumnos.length),color:totalLugares-alumnos.length>0?"#5a9e6a":"#aaa"}].map(s=>(
-          <div key={s.label} style={{background:"white",borderRadius:14,padding:"14px 8px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-            <div style={{fontSize:26,fontWeight:900,color:s.color}}>{s.value}</div>
-            <div style={{fontSize:11,color:"#aaa",fontWeight:600,marginTop:2,lineHeight:1.3}}>{s.label}</div>
+        {[{key:"todos",label:"Todos",value:turnos.length,color:C.forest},{key:"completos",label:"Completos",value:completos,color:"#c0784a"},{key:"disponibles",label:"Disponibles",value:conLugar,color:"#5a9e6a"}].map(s=>(
+          <div key={s.key} onClick={()=>setFilterTurno(f=>f===s.key?"todos":s.key)} style={{background:filterTurno===s.key?s.color:"white",borderRadius:14,padding:"14px 8px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",cursor:"pointer",border:`2px solid ${filterTurno===s.key?s.color:"transparent"}`}}>
+            <div style={{fontSize:26,fontWeight:900,color:filterTurno===s.key?"white":s.color}}>{s.value}</div>
+            <div style={{fontSize:11,fontWeight:600,marginTop:2,lineHeight:1.3,color:filterTurno===s.key?"rgba(255,255,255,0.85)":"#aaa"}}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -583,6 +591,8 @@ function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
           return ts.map(t=>{
             const ocup=ocupacion(t.id),libre=t.capacidad-ocup,pct=Math.min(ocup/t.capacidad,1);
             const alumnosEnTurno=alumnos.filter(a=>a.turno_id===t.id);
+            if(filterTurno==="completos"&&ocup<t.capacidad)return null;
+            if(filterTurno==="disponibles"&&ocup>=t.capacidad)return null;
             return (
               <div key={t.id} onClick={()=>setModalDet({...t,ocup,libre,alumnosEnTurno})} style={{background:"white",borderRadius:14,padding:"16px",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",cursor:"pointer"}}>
                 <div style={{fontSize:11,fontWeight:800,color:"#bbb",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{dia}</div>
@@ -743,6 +753,7 @@ function HornoTab({horneadas,alumnos,onRefresh,tablet}) {
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({fecha:"",alumnoId:"",pieza:"",notas:"",foto:null,observaciones:""});
 
+  const [filterAlumnaHorno,setFilterAlumnaHorno]=useState(null); // null=todos, número=alumno_id
   const addHorneada=async()=>{if(!form.pieza.trim()||!form.fecha)return;setSaving(true);await supabase.from("horneadas").insert({fecha:form.fecha,alumno_id:Number(form.alumnoId)||null,pieza:form.pieza,notas:form.notas,observaciones:form.observaciones,foto_url:form.foto||""});await onRefresh();setSaving(false);setForm({fecha:"",alumnoId:"",pieza:"",notas:"",foto:null,observaciones:""});setModalAdd(false);};
   const delHorneada=async(id)=>{setSaving(true);await supabase.from("horneadas").delete().eq("id",id);await onRefresh();setSaving(false);setModalDet(null);};
   const getNombre=id=>alumnos.find(a=>a.id===id)?.nombre||"Sin asignar";
@@ -753,9 +764,9 @@ function HornoTab({horneadas,alumnos,onRefresh,tablet}) {
   return (
     <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        <div style={{background:"linear-gradient(135deg,#f5c07a,#e8945a)",borderRadius:14,padding:"18px",color:"white"}}>
-          <div style={{fontSize:34,fontWeight:900}}>{sesiones.length}</div>
-          <div style={{fontSize:13,fontWeight:700,opacity:0.85}}>Sesiones del mes</div>
+        <div onClick={()=>setFilterAlumnaHorno(null)} style={{background:filterAlumnaHorno===null?"linear-gradient(135deg,#f5c07a,#e8945a)":"white",borderRadius:14,padding:"18px",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",border:`2px solid ${filterAlumnaHorno===null?"#e8945a":"transparent"}`}}>
+          <div style={{fontSize:34,fontWeight:900,color:filterAlumnaHorno===null?"white":"#e8945a"}}>{sesiones.length}</div>
+          <div style={{fontSize:13,fontWeight:700,color:filterAlumnaHorno===null?"rgba(255,255,255,0.85)":"#aaa"}}>Todas las sesiones</div>
         </div>
         <div style={{background:"white",borderRadius:14,padding:"18px",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
           <div style={{fontSize:34,fontWeight:900,color:C.forest}}>{horneadas.length}</div>
@@ -767,9 +778,9 @@ function HornoTab({horneadas,alumnos,onRefresh,tablet}) {
           <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:10}}>Piezas por alumna</div>
           <div style={{display:"grid",gridTemplateColumns:tablet?"1fr 1fr":"1fr",gap:8}}>
             {statsPorAlumno.map(([id,count])=>(
-              <div key={id} style={{display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:C.sage+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:C.forest,flexShrink:0}}>{getNombre(Number(id)).charAt(0)}</div>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.dark}}>{getNombre(Number(id))}</div><div style={{background:"#f0f0f0",borderRadius:6,height:5,marginTop:4,overflow:"hidden"}}><div style={{width:`${(count/maxStat)*100}%`,height:"100%",background:C.forest,borderRadius:6}}/></div></div>
+              <div key={id} onClick={()=>setFilterAlumnaHorno(f=>f===Number(id)?null:Number(id))} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",borderRadius:10,background:filterAlumnaHorno===Number(id)?"#e8f5e9":"transparent",cursor:"pointer"}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:filterAlumnaHorno===Number(id)?C.forest:C.sage+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:filterAlumnaHorno===Number(id)?"white":C.forest,flexShrink:0}}>{getNombre(Number(id)).charAt(0)}</div>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.dark}}>{getNombre(Number(id))}</div><div style={{background:"#f0f0f0",borderRadius:6,height:5,marginTop:4,overflow:"hidden"}}><div style={{width:`${(count/maxStat)*100}%`,height:"100%",background:filterAlumnaHorno===Number(id)?C.forest:C.sage,borderRadius:6}}/></div></div>
                 <div style={{fontSize:16,fontWeight:800,color:C.forest}}>{count}</div>
               </div>
             ))}
@@ -777,13 +788,16 @@ function HornoTab({horneadas,alumnos,onRefresh,tablet}) {
         </div>
       )}
       <div style={{display:"grid",gridTemplateColumns:tablet?"1fr 1fr":"1fr",gap:10,marginBottom:100}}>
-        {sesiones.map(([fecha,items])=>(
+        {sesiones.map(([fecha,items])=>{
+          const itemsFiltrados=filterAlumnaHorno===null?items:items.filter(h=>h.alumno_id===filterAlumnaHorno);
+          if(itemsFiltrados.length===0)return null;
+          return(
           <div key={fecha} style={{background:"white",borderRadius:14,padding:"15px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{fontSize:14,fontWeight:800,color:C.dark}}>🔥 {formatDate(fecha)}</div>
               <div style={{fontSize:12,background:"#fff0e0",color:"#c0784a",borderRadius:8,padding:"3px 10px",fontWeight:700}}>{items.length} {items.length===1?"pieza":"piezas"}</div>
             </div>
-            {items.map(h=>(
+            {itemsFiltrados.map(h=>(
               <div key={h.id} onClick={()=>setModalDet(h)} style={{padding:"10px 0",borderTop:"1px solid #f5f5f5",cursor:"pointer"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   {h.foto_url?<div style={{width:50,height:50,borderRadius:8,overflow:"hidden",flexShrink:0}}><img src={h.foto_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/></div>
@@ -797,7 +811,7 @@ function HornoTab({horneadas,alumnos,onRefresh,tablet}) {
               </div>
             ))}
           </div>
-        ))}
+        );})}
         {sesiones.length===0&&<div style={{textAlign:"center",color:"#ccc",padding:"50px 0",gridColumn:"1/-1"}}>Aún no hay horneadas 🔥</div>}
       </div>
       <FAB onClick={()=>setModalAdd(true)}/>
