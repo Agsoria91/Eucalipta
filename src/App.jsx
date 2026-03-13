@@ -51,7 +51,7 @@ function getCiclos() {
 
 // ── Excel export ───────────────────────────────────────────────────────────
 function toCSV(headers, rows) {
-  const esc = v => `"${String(v??""').replace(/"/g,'""')}"`;
+  const esc = v => `"${String(v??"").replace(/"/g,'""')}"`;
   return [headers.map(esc).join(","), ...rows.map(r=>r.map(esc).join(","))].join("\n");
 }
 function downloadCSV(filename, csv) {
