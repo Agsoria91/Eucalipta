@@ -235,26 +235,36 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
   const ciclo=getCicloActual();
   const [search,setSearch]=useState("");
   const [filter,setFilter]=useState("todos");
+  const [verBajas,setVerBajas]=useState(false);
   const [modalAdd,setModalAdd]=useState(false);
   const [modalDet,setModalDet]=useState(null);
+  const [modalEdit,setModalEdit]=useState(null);
   const [modalPago,setModalPago]=useState(null);
+  const [modalBaja,setModalBaja]=useState(null);
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({nombre:"",turnoId:"",arcilla:false,celular:"",cumple:""});
+  const [editForm,setEditForm]=useState({nombre:"",turnoId:"",arcilla:false,celular:"",cumple:""});
   const [pagoForm,setPagoForm]=useState({fecha:"",metodo:"transferencia",destinatario:"",items:[],observaciones:""});
+  const [bajaForm,setBajaForm]=useState({fecha_baja:"",motivo_baja:""});
 
   const getTurno=id=>turnos.find(t=>t.id===id);
   const getPago=aid=>pagos.find(p=>p.alumno_id===aid&&p.ciclo_key===ciclo.key)||null;
-  const pagados=alumnos.filter(a=>!!getPago(a.id)).length;
+  const getHistorial=aid=>pagos.filter(p=>p.alumno_id===aid).sort((a,b)=>b.ciclo_key.localeCompare(a.ciclo_key));
 
-  const filtered=useMemo(()=>alumnos.filter(a=>{
+  const activas=alumnos.filter(a=>a.activa!==false);
+  const bajas=alumnos.filter(a=>a.activa===false);
+  const lista=verBajas?bajas:activas;
+  const pagados=activas.filter(a=>!!getPago(a.id)).length;
+
+  const filtered=useMemo(()=>lista.filter(a=>{
     const ms=a.nombre.toLowerCase().includes(search.toLowerCase());
     const pago=getPago(a.id);
     const mf=filter==="todos"?true:filter==="pagados"?!!pago:!pago;
     return ms&&mf;
-  }),[alumnos,pagos,search,filter]);
+  }),[lista,pagos,search,filter]);
 
   const hoy=new Date();
-  const proxCumple=alumnos.filter(a=>{
+  const proxCumple=activas.filter(a=>{
     if(!a.cumple)return false;
     const c=new Date(a.cumple+"T00:00:00");
     const diff=(new Date(hoy.getFullYear(),c.getMonth(),c.getDate())-hoy)/86400000;
@@ -271,8 +281,36 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
   };
 
   const quitarPago=async(aid)=>{setSaving(true);await supabase.from("pagos").delete().eq("alumno_id",aid).eq("ciclo_key",ciclo.key);await onRefresh();setSaving(false);setModalDet(null);};
-  const addAlumno=async()=>{if(!form.nombre.trim())return;setSaving(true);await supabase.from("alumnos").insert({nombre:form.nombre,turno_id:Number(form.turnoId)||null,arcilla:form.arcilla,celular:form.celular,cumple:form.cumple});await onRefresh();setSaving(false);setForm({nombre:"",turnoId:"",arcilla:false,celular:"",cumple:""});setModalAdd(false);};
-  const delAlumno=async(id)=>{setSaving(true);await supabase.from("alumnos").delete().eq("id",id);await onRefresh();setSaving(false);setModalDet(null);};
+
+  const addAlumno=async()=>{
+    if(!form.nombre.trim())return;
+    setSaving(true);
+    await supabase.from("alumnos").insert({nombre:form.nombre,turno_id:Number(form.turnoId)||null,arcilla:form.arcilla,celular:form.celular,cumple:form.cumple,activa:true});
+    await onRefresh();setSaving(false);setForm({nombre:"",turnoId:"",arcilla:false,celular:"",cumple:""});setModalAdd(false);
+  };
+
+  const editarAlumno=async()=>{
+    if(!editForm.nombre.trim())return;
+    setSaving(true);
+    await supabase.from("alumnos").update({nombre:editForm.nombre,turno_id:Number(editForm.turnoId)||null,arcilla:editForm.arcilla,celular:editForm.celular,cumple:editForm.cumple}).eq("id",modalEdit.id);
+    await onRefresh();setSaving(false);
+    setModalEdit(null);setModalDet(null);
+  };
+
+  const darBaja=async()=>{
+    if(!bajaForm.fecha_baja)return;
+    setSaving(true);
+    await supabase.from("alumnos").update({activa:false,fecha_baja:bajaForm.fecha_baja,motivo_baja:bajaForm.motivo_baja}).eq("id",modalBaja.id);
+    await onRefresh();setSaving(false);setModalBaja(null);setModalDet(null);
+    setBajaForm({fecha_baja:"",motivo_baja:""});
+  };
+
+  const reactivar=async(id)=>{
+    setSaving(true);
+    await supabase.from("alumnos").update({activa:true,fecha_baja:null,motivo_baja:null}).eq("id",id);
+    await onRefresh();setSaving(false);setModalDet(null);
+  };
+
   const toggleItem=item=>setPagoForm(p=>({...p,items:p.items.includes(item)?p.items.filter(i=>i!==item):[...p.items,item]}));
 
   const itemsConfig=[
@@ -283,6 +321,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
 
   return (
     <div>
+      {/* Banner ciclo */}
       <div style={{background:`linear-gradient(135deg,${C.forest},${C.sage})`,borderRadius:16,padding:"14px 20px",marginBottom:16,color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
           <div style={{fontSize:11,fontWeight:700,opacity:0.8,letterSpacing:"0.08em"}}>CICLO ACTIVO</div>
@@ -290,16 +329,17 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
           <div style={{fontSize:12,opacity:0.75}}>20/{ciclo.desde.getMonth()+1} — 19/{ciclo.hasta.getMonth()+1}</div>
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:32,fontWeight:900}}>{pagados}<span style={{fontSize:16,opacity:0.7}}>/{alumnos.length}</span></div>
+          <div style={{fontSize:32,fontWeight:900}}>{pagados}<span style={{fontSize:16,opacity:0.7}}>/{activas.length}</span></div>
           <div style={{fontSize:12,opacity:0.75}}>pagaron</div>
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
-        {[{label:"Total",value:alumnos.length,color:C.forest},{label:"Pagaron",value:pagados,color:"#5a9e6a"},{label:"Deben",value:alumnos.length-pagados,color:"#c0784a"}].map(s=>(
-          <div key={s.label} style={{background:"white",borderRadius:14,padding:"14px 8px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-            <div style={{fontSize:28,fontWeight:900,color:s.color}}>{s.value}</div>
-            <div style={{fontSize:12,color:"#aaa",fontWeight:600,marginTop:2}}>{s.label}</div>
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}}>
+        {[{label:"Activas",value:activas.length,color:C.forest},{label:"Pagaron",value:pagados,color:"#5a9e6a"},{label:"Deben",value:activas.length-pagados,color:"#c0784a"},{label:"Bajas",value:bajas.length,color:"#aaa"}].map(s=>(
+          <div key={s.label} style={{background:"white",borderRadius:14,padding:"12px 6px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+            <div style={{fontSize:24,fontWeight:900,color:s.color}}>{s.value}</div>
+            <div style={{fontSize:11,color:"#aaa",fontWeight:600,marginTop:2}}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -318,26 +358,33 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
         </select>
       </div>
 
-      {/* Botones exportar */}
+      {/* Toggle activas/bajas */}
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <button onClick={()=>setVerBajas(false)} style={{flex:1,padding:"9px",borderRadius:10,border:`2px solid ${!verBajas?C.forest:"#e0e0e0"}`,background:!verBajas?"#e8f5e9":"white",color:!verBajas?C.forest:"#aaa",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Activas ({activas.length})</button>
+        <button onClick={()=>setVerBajas(true)} style={{flex:1,padding:"9px",borderRadius:10,border:`2px solid ${verBajas?"#aaa":"#e0e0e0"}`,background:verBajas?"#f0f0f0":"white",color:verBajas?"#666":"#aaa",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Bajas ({bajas.length})</button>
+      </div>
+
+      {/* Exportar */}
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <button onClick={()=>exportAlumnas(alumnos,pagos,turnos)} style={{flex:1,background:"#e8f5e9",border:"none",borderRadius:10,padding:"9px",fontSize:12,fontWeight:700,color:C.forest,cursor:"pointer",fontFamily:"inherit"}}>📥 Exportar alumnas</button>
         <button onClick={()=>exportPagos(pagos,alumnos)} style={{flex:1,background:"#e8f5e9",border:"none",borderRadius:10,padding:"9px",fontSize:12,fontWeight:700,color:C.forest,cursor:"pointer",fontFamily:"inherit"}}>📥 Exportar pagos</button>
       </div>
 
+      {/* Lista */}
       <div style={{display:"grid",gridTemplateColumns:tablet?"1fr 1fr":"1fr",gap:10,marginBottom:100}}>
         {filtered.map(a=>{
           const turno=getTurno(a.turno_id),pago=getPago(a.id);
           return (
-            <div key={a.id} onClick={()=>setModalDet(a)} style={{background:"white",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 2px 8px rgba(0,0,0,0.05)",cursor:"pointer"}}>
-              <div style={{width:44,height:44,borderRadius:"50%",background:pago?C.sage+"55":"#f5d4c0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:pago?C.forest:"#c0784a",flexShrink:0}}>{a.nombre.charAt(0)}</div>
+            <div key={a.id} onClick={()=>setModalDet(a)} style={{background:"white",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 2px 8px rgba(0,0,0,0.05)",cursor:"pointer",opacity:a.activa===false?0.6:1}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:a.activa===false?"#e0e0e0":pago?C.sage+"55":"#f5d4c0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:a.activa===false?"#aaa":pago?C.forest:"#c0784a",flexShrink:0}}>{a.nombre.charAt(0)}</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,color:C.dark,fontSize:15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.nombre}</div>
-                <div style={{fontSize:12,color:"#aaa",marginTop:2}}>{turno?`${turno.dia} ${turno.hora}`:"Sin turno"}</div>
+                <div style={{fontSize:12,color:"#aaa",marginTop:2}}>{a.activa===false?"🔴 Baja":turno?`${turno.dia} ${turno.hora}`:"Sin turno"}</div>
               </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+              {a.activa!==false&&<div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                 <div style={{fontSize:13,fontWeight:800,color:pago?C.forest:"#c0784a"}}>{formatPeso(pago?pago.monto:montoBase(a))}</div>
                 <div style={{fontSize:11,background:pago?"#e8f5e9":"#fdecea",color:pago?"#388e3c":"#c62828",borderRadius:6,padding:"2px 8px",fontWeight:700}}>{pago?"✓ Pago":"Debe"}</div>
-              </div>
+              </div>}
             </div>
           );
         })}
@@ -345,30 +392,107 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
 
       <FAB onClick={()=>setModalAdd(true)}/>
 
+      {/* DETALLE */}
       <Modal open={!!modalDet} onClose={()=>setModalDet(null)} title="Detalle alumna">
-        {modalDet&&(()=>{const turno=getTurno(modalDet.turno_id),pago=getPago(modalDet.id);return(
-          <div>
-            <div style={{textAlign:"center",marginBottom:18}}>
-              <div style={{width:64,height:64,borderRadius:"50%",background:C.sage+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,fontWeight:900,color:C.forest,margin:"0 auto 10px"}}>{modalDet.nombre.charAt(0)}</div>
-              <div style={{fontSize:20,fontWeight:800,color:C.dark}}>{modalDet.nombre}</div>
+        {modalDet&&(()=>{
+          const turno=getTurno(modalDet.turno_id),pago=getPago(modalDet.id),historial=getHistorial(modalDet.id);
+          return(
+            <div>
+              <div style={{textAlign:"center",marginBottom:18}}>
+                <div style={{width:64,height:64,borderRadius:"50%",background:C.sage+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,fontWeight:900,color:C.forest,margin:"0 auto 10px"}}>{modalDet.nombre.charAt(0)}</div>
+                <div style={{fontSize:20,fontWeight:800,color:C.dark}}>{modalDet.nombre}</div>
+                {modalDet.activa===false&&<div style={{fontSize:12,background:"#f0f0f0",color:"#888",borderRadius:8,padding:"3px 12px",display:"inline-block",marginTop:6,fontWeight:700}}>🔴 Baja {modalDet.fecha_baja?formatDate(modalDet.fecha_baja):""}</div>}
+              </div>
+
+              {/* Datos */}
+              <div style={{background:C.cream,borderRadius:14,padding:16,marginBottom:16}}>
+                <Row label="Turno" value={turno?`${turno.dia} ${turno.hora}`:"Sin turno"}/>
+                {turno&&<Row label="Profesora" value={turno.profesora}/>}
+                <Row label="Arcilla" value={modalDet.arcilla?"Incluida":"No incluida"}/>
+                {modalDet.celular&&<Row label="📱 Celular" value={modalDet.celular}/>}
+                {modalDet.cumple&&<Row label="🎂 Cumpleaños" value={formatDate(modalDet.cumple)}/>}
+                {modalDet.motivo_baja&&<Row label="Motivo baja" value={modalDet.motivo_baja}/>}
+              </div>
+
+              {/* Pago ciclo actual — solo activas */}
+              {modalDet.activa!==false&&(
+                <div style={{background:pago?"#e8f5e9":"#fdecea",borderRadius:14,padding:16,marginBottom:16}}>
+                  <div style={{fontWeight:700,color:pago?"#388e3c":"#c62828",fontSize:15,marginBottom:pago?8:0}}>{pago?"✓ Pago "+ciclo.label:"⚠ Pendiente — "+ciclo.label}</div>
+                  {pago&&(<><Row label="Monto" value={formatPeso(pago.monto)}/><Row label="Fecha" value={formatDate(pago.fecha)}/><Row label="Método" value={pago.metodo}/>{pago.destinatario&&<Row label="Destinatario" value={pago.destinatario}/>}{pago.items?.length>0&&<Row label="Extras" value={itemsLabel(pago.items)}/>}{pago.observaciones&&<div style={{marginTop:8,fontSize:13,color:"#555",fontStyle:"italic"}}>"{pago.observaciones}"</div>}</>)}
+                </div>
+              )}
+
+              {/* Historial de pagos */}
+              {historial.length>0&&(
+                <div style={{marginBottom:16}}>
+                  <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:10}}>Historial de pagos ({historial.length} ciclos)</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {historial.map(p=>{
+                      const [yr,mn]=p.ciclo_key.split("-");
+                      const label=`${MESES[Number(mn)-1]} ${yr}`;
+                      return (
+                        <div key={p.id} style={{background:"white",borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid #f0ece6"}}>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:700,color:C.dark}}>{label}</div>
+                            <div style={{fontSize:11,color:"#aaa"}}>{formatDate(p.fecha)} · {p.metodo}{p.destinatario?` → ${p.destinatario}`:""}</div>
+                            {p.items?.length>0&&<div style={{fontSize:11,color:C.forest}}>{itemsLabel(p.items)}</div>}
+                          </div>
+                          <div style={{fontSize:15,fontWeight:900,color:C.forest}}>{formatPeso(p.monto)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Acciones */}
+              {modalDet.activa!==false?(
+                <>
+                  {!pago?<Btn onClick={()=>{setModalDet(null);setModalPago(modalDet);}}>✓ Registrar pago {ciclo.label}</Btn>:<Btn onClick={()=>quitarPago(modalDet.id)} variant="secondary" disabled={saving}>Quitar pago del ciclo</Btn>}
+                  <Btn onClick={()=>{setEditForm({nombre:modalDet.nombre,turnoId:modalDet.turno_id||"",arcilla:modalDet.arcilla,celular:modalDet.celular||"",cumple:modalDet.cumple||""});setModalEdit(modalDet);}} variant="secondary" style={{marginTop:8}}>✏️ Editar datos</Btn>
+                  <Btn onClick={()=>{setBajaForm({fecha_baja:new Date().toISOString().split("T")[0],motivo_baja:""});setModalBaja(modalDet);}} variant="secondary" style={{marginTop:8,color:"#c0784a",border:"2px solid #e0d0c0",background:"#fff8f5"}}>🔴 Dar de baja</Btn>
+                </>
+              ):(
+                <Btn onClick={()=>reactivar(modalDet.id)} disabled={saving}>🟢 Reactivar alumna</Btn>
+              )}
             </div>
-            <div style={{background:C.cream,borderRadius:14,padding:16,marginBottom:16}}>
-              <Row label="Turno" value={turno?`${turno.dia} ${turno.hora}`:"Sin turno"}/>
-              {turno&&<Row label="Profesora" value={turno.profesora}/>}
-              <Row label="Arcilla" value={modalDet.arcilla?"Incluida":"No incluida"}/>
-              {modalDet.celular&&<Row label="📱 Celular" value={modalDet.celular}/>}
-              {modalDet.cumple&&<Row label="🎂 Cumpleaños" value={formatDate(modalDet.cumple)}/>}
-            </div>
-            <div style={{background:pago?"#e8f5e9":"#fdecea",borderRadius:14,padding:16,marginBottom:16}}>
-              <div style={{fontWeight:700,color:pago?"#388e3c":"#c62828",fontSize:15,marginBottom:pago?8:0}}>{pago?"✓ Pago "+ciclo.label:"⚠ Pendiente — "+ciclo.label}</div>
-              {pago&&(<><Row label="Monto" value={formatPeso(pago.monto)}/><Row label="Fecha" value={formatDate(pago.fecha)}/><Row label="Método" value={pago.metodo}/>{pago.destinatario&&<Row label="Destinatario" value={pago.destinatario}/>}{pago.items?.length>0&&<Row label="Extras" value={itemsLabel(pago.items)}/>}{pago.observaciones&&<div style={{marginTop:8,fontSize:13,color:"#555",fontStyle:"italic"}}>"{pago.observaciones}"</div>}</>)}
-            </div>
-            {!pago?<Btn onClick={()=>{setModalDet(null);setModalPago(modalDet);}}>✓ Registrar pago {ciclo.label}</Btn>:<Btn onClick={()=>quitarPago(modalDet.id)} variant="secondary" disabled={saving}>Quitar pago del ciclo</Btn>}
-            <Btn onClick={()=>delAlumno(modalDet.id)} variant="danger" style={{marginTop:8}} disabled={saving}>Eliminar alumna</Btn>
-          </div>
-        );})()}
+          );
+        })()}
       </Modal>
 
+      {/* EDITAR */}
+      <Modal open={!!modalEdit} onClose={()=>setModalEdit(null)} title={`Editar — ${modalEdit?.nombre}`}>
+        {modalEdit&&(<div>
+          <Input label="Nombre completo *" value={editForm.nombre} onChange={e=>setEditForm(p=>({...p,nombre:e.target.value}))}/>
+          <Sel label="Turno" value={editForm.turnoId} onChange={e=>setEditForm(p=>({...p,turnoId:e.target.value}))}>
+            <option value="">Sin turno</option>
+            {turnos.map(t=><option key={t.id} value={t.id}>{t.dia} {t.hora} — {t.profesora}</option>)}
+          </Sel>
+          <Input label="📱 Celular" value={editForm.celular} onChange={e=>setEditForm(p=>({...p,celular:e.target.value}))} type="tel" placeholder="299-4xxxxxx"/>
+          <Input label="🎂 Cumpleaños" value={editForm.cumple} onChange={e=>setEditForm(p=>({...p,cumple:e.target.value}))} type="date"/>
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:12,fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:8}}>Arcilla</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {[false,true].map(v=>(<button key={String(v)} onClick={()=>setEditForm(p=>({...p,arcilla:v}))} style={{padding:"12px 8px",borderRadius:12,border:`2px solid ${editForm.arcilla===v?C.forest:"#e0e0e0"}`,background:editForm.arcilla===v?"#e8f5e9":"white",color:editForm.arcilla===v?C.forest:"#aaa",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>{v?`Con — ${formatPeso(CUOTA_CON)}`:`Sin — ${formatPeso(CUOTA_SIN)}`}</button>))}
+            </div>
+          </div>
+          <Btn onClick={editarAlumno} disabled={saving}>{saving?"Guardando...":"Guardar cambios"}</Btn>
+        </div>)}
+      </Modal>
+
+      {/* DAR DE BAJA */}
+      <Modal open={!!modalBaja} onClose={()=>setModalBaja(null)} title={`Dar de baja — ${modalBaja?.nombre}`}>
+        {modalBaja&&(<div>
+          <div style={{background:"#fff8f5",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#c0784a",fontWeight:600}}>
+            La alumna quedará en el registro histórico. Podés reactivarla en cualquier momento.
+          </div>
+          <Input label="Fecha de baja" type="date" value={bajaForm.fecha_baja} onChange={e=>setBajaForm(p=>({...p,fecha_baja:e.target.value}))}/>
+          <Textarea label="Motivo (opcional)" value={bajaForm.motivo_baja} onChange={e=>setBajaForm(p=>({...p,motivo_baja:e.target.value}))} placeholder="Ej: Viaje, cambio de horario..."/>
+          <Btn onClick={darBaja} disabled={saving} variant="danger">{saving?"Guardando...":"Confirmar baja"}</Btn>
+        </div>)}
+      </Modal>
+
+      {/* REGISTRAR PAGO */}
       <Modal open={!!modalPago} onClose={()=>setModalPago(null)} title={`Pago — ${modalPago?.nombre}`}>
         {modalPago&&(<div>
           <div style={{background:C.cream,borderRadius:12,padding:"12px 16px",marginBottom:16}}>
@@ -398,6 +522,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
         </div>)}
       </Modal>
 
+      {/* NUEVA ALUMNA */}
       <Modal open={modalAdd} onClose={()=>setModalAdd(false)} title="Nueva alumna">
         <Input label="Nombre completo *" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))} placeholder="Nombre y apellido"/>
         <Sel label="Turno" value={form.turnoId} onChange={e=>setForm(p=>({...p,turnoId:e.target.value}))}>
@@ -421,7 +546,6 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
 // ══════════════════════════════════════════════════════════════════════════
 // TURNOS
 // ══════════════════════════════════════════════════════════════════════════
-function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
   const [modalAdd,setModalAdd]=useState(false);
   const [modalDet,setModalDet]=useState(null);
   const [saving,setSaving]=useState(false);
