@@ -797,6 +797,49 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════════════════════════
+function LoginScreen({onLogin}) {
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const handleLogin=async()=>{
+    if(!email||!password){setError("Completá email y contraseña");return;}
+    setLoading(true);setError("");
+    const {error:err}=await supabase.auth.signInWithPassword({email,password});
+    if(err){setError("Email o contraseña incorrectos");setLoading(false);}
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:C.cream,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Montserrat','Segoe UI',sans-serif",padding:20}}>
+      <div style={{background:"white",borderRadius:24,padding:"40px 32px",width:"100%",maxWidth:380,boxShadow:"0 8px 40px rgba(116,149,88,0.15)"}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{width:72,height:72,borderRadius:"50%",background:"#e8f5e9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",color:C.forest}}>
+            <LeafIcon size={36}/>
+          </div>
+          <div style={{fontSize:26,fontWeight:900,color:C.dark}}>Eucalipta</div>
+          <div style={{fontSize:11,letterSpacing:"0.14em",color:C.forest,fontWeight:700,textTransform:"uppercase",marginTop:4}}>Taller de Cerámica</div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:12,fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:5}}>Email</label>
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} placeholder="tucorreo@gmail.com" onKeyDown={e=>e.key==="Enter"&&handleLogin()} style={{...INPUT_STYLE}}/>
+        </div>
+        <div style={{marginBottom:20}}>
+          <label style={{fontSize:12,fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:5}}>Contraseña</label>
+          <input type="password" value={password} onChange={e=>{setPassword(e.target.value);setError("");}} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handleLogin()} style={{...INPUT_STYLE}}/>
+        </div>
+        {error&&<div style={{background:"#fdecea",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:"#c62828",fontWeight:600}}>⚠ {error}</div>}
+        <button onClick={handleLogin} disabled={loading} style={{width:"100%",background:C.forest,color:"white",border:"none",borderRadius:12,padding:"14px",fontSize:16,fontWeight:700,cursor:loading?"not-allowed":"pointer",fontFamily:"inherit",opacity:loading?0.7:1}}>
+          {loading?"Ingresando...":"Ingresar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // APP ROOT
 // ══════════════════════════════════════════════════════════════════════════
 const TABS=[
@@ -808,10 +851,26 @@ const TABS=[
 export default function EucaliptaApp() {
   const [tab,setTab]=useState("alumnos");
   const [loading,setLoading]=useState(true);
+  const [session,setSession]=useState(null);
   const [data,setData]=useState({alumnos:[],turnos:[],encargos:[],horneadas:[],pagos:[],movimientos:[]});
   const tablet=useIsTablet();
 
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      setSession(session);
+      if(session)loadAll();
+      else setLoading(false);
+    });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,sess)=>{
+      setSession(sess);
+      if(sess)loadAll();
+      else setLoading(false);
+    });
+    return ()=>subscription.unsubscribe();
+  },[]);
+
   const loadAll=async()=>{
+    setLoading(true);
     const [a,t,e,h,p,m]=await Promise.all([
       supabase.from("alumnos").select("*").order("nombre"),
       supabase.from("turnos").select("*").order("id"),
@@ -823,7 +882,14 @@ export default function EucaliptaApp() {
     setData({alumnos:a.data||[],turnos:t.data||[],encargos:e.data||[],horneadas:h.data||[],pagos:p.data||[],movimientos:m.data||[]});
     setLoading(false);
   };
-  useEffect(()=>{loadAll();},[]);
+
+  const handleLogout=async()=>{
+    await supabase.auth.signOut();
+    setSession(null);
+  };
+
+  if(loading) return <div style={{minHeight:"100vh",background:C.cream,display:"flex",alignItems:"center",justifyContent:"center"}}><Spinner/></div>;
+  if(!session) return <LoginScreen/>;
 
   const titulos={alumnos:"Alumnas",turnos:"Turnos",encargos:"Encargos",horno:"Horno",finanzas:"Finanzas"};
 
@@ -835,7 +901,10 @@ export default function EucaliptaApp() {
           <div style={{fontSize:17,fontWeight:900,color:C.dark,lineHeight:1}}>Eucalipta</div>
           <div style={{fontSize:9,letterSpacing:"0.12em",color:C.forest,fontWeight:700,textTransform:"uppercase"}}>Taller de Cerámica</div>
         </div>
-        <div style={{marginLeft:"auto",fontSize:14,fontWeight:700,color:C.forest}}>{titulos[tab]}</div>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.forest}}>{titulos[tab]}</div>
+          <button onClick={handleLogout} title="Cerrar sesión" style={{background:"none",border:"1.5px solid #e0e0e0",borderRadius:8,padding:"5px 10px",fontSize:12,color:"#aaa",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Salir</button>
+        </div>
       </div>
 
       <div style={{display:"flex",flex:1}}>
@@ -850,15 +919,11 @@ export default function EucaliptaApp() {
         )}
 
         <div style={{flex:1,padding:tablet?"20px 24px":"14px 14px 0",maxWidth:tablet?900:480,margin:"0 auto",width:"100%"}}>
-          {loading?<Spinner/>:(
-            <>
-              {tab==="alumnos"  &&<AlumnosTab  alumnos={data.alumnos} pagos={data.pagos} turnos={data.turnos} onRefresh={loadAll} tablet={tablet}/>}
-              {tab==="turnos"   &&<TurnosTab   turnos={data.turnos} alumnos={data.alumnos} onRefresh={loadAll} tablet={tablet}/>}
-              {tab==="encargos" &&<EncargosTab encargos={data.encargos} onRefresh={loadAll} tablet={tablet}/>}
-              {tab==="horno"    &&<HornoTab    horneadas={data.horneadas} alumnos={data.alumnos} onRefresh={loadAll} tablet={tablet}/>}
-              {tab==="finanzas" &&<FinanzasTab alumnos={data.alumnos} pagos={data.pagos} encargos={data.encargos} movimientos={data.movimientos} onRefresh={loadAll} tablet={tablet}/>}
-            </>
-          )}
+          {tab==="alumnos"  &&<AlumnosTab  alumnos={data.alumnos} pagos={data.pagos} turnos={data.turnos} onRefresh={loadAll} tablet={tablet}/>}
+          {tab==="turnos"   &&<TurnosTab   turnos={data.turnos} alumnos={data.alumnos} onRefresh={loadAll} tablet={tablet}/>}
+          {tab==="encargos" &&<EncargosTab encargos={data.encargos} onRefresh={loadAll} tablet={tablet}/>}
+          {tab==="horno"    &&<HornoTab    horneadas={data.horneadas} alumnos={data.alumnos} onRefresh={loadAll} tablet={tablet}/>}
+          {tab==="finanzas" &&<FinanzasTab alumnos={data.alumnos} pagos={data.pagos} encargos={data.encargos} movimientos={data.movimientos} onRefresh={loadAll} tablet={tablet}/>}
         </div>
       </div>
 
