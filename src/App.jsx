@@ -549,14 +549,23 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
 function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
   const [modalAdd,setModalAdd]=useState(false);
   const [modalDet,setModalDet]=useState(null);
+  const [modalEdit,setModalEdit]=useState(null);
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({dia:"Lunes",hora:"",profesora:"Azu",capacidad:6});
+  const [editForm,setEditForm]=useState({dia:"Lunes",hora:"",profesora:"",capacidad:6});
 
   const ocupacion=id=>alumnos.filter(a=>a.turno_id===id).length;
   const turnosPorDia=useMemo(()=>{const m={};DIAS_ORDEN.forEach(d=>{m[d]=turnos.filter(t=>t.dia===d);});return m;},[turnos]);
   const totalLugares=turnos.reduce((a,t)=>a+t.capacidad,0);
+
   const addTurno=async()=>{if(!form.hora.trim())return;setSaving(true);await supabase.from("turnos").insert({dia:form.dia,hora:form.hora,profesora:form.profesora,capacidad:Number(form.capacidad)});await onRefresh();setSaving(false);setForm({dia:"Lunes",hora:"",profesora:"Azu",capacidad:6});setModalAdd(false);};
   const delTurno=async(id)=>{setSaving(true);await supabase.from("turnos").delete().eq("id",id);await onRefresh();setSaving(false);setModalDet(null);};
+  const editarTurno=async()=>{
+    if(!editForm.hora.trim())return;
+    setSaving(true);
+    await supabase.from("turnos").update({dia:editForm.dia,hora:editForm.hora,profesora:editForm.profesora,capacidad:Number(editForm.capacidad)}).eq("id",modalEdit.id);
+    await onRefresh();setSaving(false);setModalEdit(null);setModalDet(null);
+  };
 
   return (
     <div>
@@ -592,15 +601,48 @@ function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
         })}
       </div>
       <FAB onClick={()=>setModalAdd(true)}/>
+
+      {/* DETALLE */}
       <Modal open={!!modalDet} onClose={()=>setModalDet(null)} title="Detalle turno">
         {modalDet&&(<div>
           <div style={{background:C.cream,borderRadius:14,padding:16,marginBottom:16}}>
-            <Row label="Día" value={modalDet.dia}/><Row label="Horario" value={modalDet.hora}/><Row label="Profesora" value={modalDet.profesora}/><Row label="Capacidad" value={`${modalDet.capacidad} lugares`}/><Row label="Libres" value={modalDet.libre<0?`${Math.abs(modalDet.libre)} sobre cupo`:modalDet.libre} valueColor={modalDet.libre<=0?"#c0784a":"#388e3c"}/>
+            <Row label="Día" value={modalDet.dia}/>
+            <Row label="Horario" value={modalDet.hora}/>
+            <Row label="Profesora" value={modalDet.profesora}/>
+            <Row label="Capacidad" value={`${modalDet.capacidad} lugares`}/>
+            <Row label="Libres" value={modalDet.libre<0?`${Math.abs(modalDet.libre)} sobre cupo`:modalDet.libre} valueColor={modalDet.libre<=0?"#c0784a":"#388e3c"}/>
           </div>
-          {modalDet.alumnosEnTurno.length>0&&(<div><div style={{fontSize:12,fontWeight:700,color:"#aaa",textTransform:"uppercase",marginBottom:8}}>Alumnas</div>{modalDet.alumnosEnTurno.map(a=>(<div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}><div style={{width:34,height:34,borderRadius:"50%",background:C.sage+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:C.forest}}>{a.nombre.charAt(0)}</div><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:C.dark}}>{a.nombre}</div>{a.celular&&<div style={{fontSize:12,color:"#aaa"}}>📱 {a.celular}</div>}</div></div>))}</div>)}
-          <Btn onClick={()=>delTurno(modalDet.id)} variant="danger" style={{marginTop:12}} disabled={saving}>Eliminar turno</Btn>
+          {modalDet.alumnosEnTurno.length>0&&(
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#aaa",textTransform:"uppercase",marginBottom:8}}>Alumnas en este turno</div>
+              {modalDet.alumnosEnTurno.map(a=>(
+                <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
+                  <div style={{width:34,height:34,borderRadius:"50%",background:C.sage+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:C.forest}}>{a.nombre.charAt(0)}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:C.dark}}>{a.nombre}</div>
+                    {a.celular&&<div style={{fontSize:12,color:"#aaa"}}>📱 {a.celular}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <Btn onClick={()=>{setEditForm({dia:modalDet.dia,hora:modalDet.hora,profesora:modalDet.profesora,capacidad:modalDet.capacidad});setModalEdit(modalDet);}} variant="secondary">✏️ Editar turno</Btn>
+          <Btn onClick={()=>delTurno(modalDet.id)} variant="danger" style={{marginTop:8}} disabled={saving}>Eliminar turno</Btn>
         </div>)}
       </Modal>
+
+      {/* EDITAR */}
+      <Modal open={!!modalEdit} onClose={()=>setModalEdit(null)} title={`Editar — ${modalEdit?.dia} ${modalEdit?.hora}`}>
+        {modalEdit&&(<div>
+          <Sel label="Día" value={editForm.dia} onChange={e=>setEditForm(p=>({...p,dia:e.target.value}))}>{DIAS_ORDEN.map(d=><option key={d}>{d}</option>)}</Sel>
+          <Input label="Horario" value={editForm.hora} onChange={e=>setEditForm(p=>({...p,hora:e.target.value}))} placeholder="Ej: 18:00 a 20:00hs"/>
+          <Input label="Profesora" value={editForm.profesora} onChange={e=>setEditForm(p=>({...p,profesora:e.target.value}))}/>
+          <Input label="Capacidad" type="number" value={editForm.capacidad} onChange={e=>setEditForm(p=>({...p,capacidad:e.target.value}))}/>
+          <Btn onClick={editarTurno} disabled={saving}>{saving?"Guardando...":"Guardar cambios"}</Btn>
+        </div>)}
+      </Modal>
+
+      {/* NUEVO */}
       <Modal open={modalAdd} onClose={()=>setModalAdd(false)} title="Nuevo turno">
         <Sel label="Día" value={form.dia} onChange={e=>setForm(p=>({...p,dia:e.target.value}))}>{DIAS_ORDEN.map(d=><option key={d}>{d}</option>)}</Sel>
         <Input label="Horario" value={form.hora} onChange={e=>setForm(p=>({...p,hora:e.target.value}))} placeholder="Ej: 18:00 a 20:00hs"/>
