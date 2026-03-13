@@ -546,6 +546,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
 // ══════════════════════════════════════════════════════════════════════════
 // TURNOS
 // ══════════════════════════════════════════════════════════════════════════
+function TurnosTab({turnos,alumnos,onRefresh,tablet}) {
   const [modalAdd,setModalAdd]=useState(false);
   const [modalDet,setModalDet]=useState(null);
   const [saving,setSaving]=useState(false);
