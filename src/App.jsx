@@ -33,8 +33,8 @@ function useIsTablet() {
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 function getCicloActual() {
   const hoy = new Date(), year = hoy.getFullYear(), month = hoy.getMonth();
-  const desde = new Date(month===0?year-1:year, month===0?11:month-1, 20);
-  const hasta  = new Date(year, month, 19);
+  const desde = new Date(month===0?year-1:year, month===0?11:month-1, 25);
+  const hasta  = new Date(year, month, 24);
   return { label:`${MESES[hasta.getMonth()]} ${hasta.getFullYear()}`, desde, hasta, key:`${hasta.getFullYear()}-${String(hasta.getMonth()+1).padStart(2,"0")}` };
 }
 function getCiclos() {
@@ -42,8 +42,8 @@ function getCiclos() {
   for (let i=0;i<12;i++) {
     const ref = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
     const year=ref.getFullYear(), month=ref.getMonth();
-    const desde=new Date(month===0?year-1:year, month===0?11:month-1, 20);
-    const hasta=new Date(year, month, 19);
+    const desde=new Date(month===0?year-1:year, month===0?11:month-1, 25);
+    const hasta=new Date(year, month, 24);
     result.push({ label:`${MESES[month]} ${year}`, desde, hasta, key:`${year}-${String(month+1).padStart(2,"0")}` });
   }
   return result;
@@ -232,7 +232,9 @@ function PhotoPicker({value,onChange}) {
 // ALUMNAS
 // ══════════════════════════════════════════════════════════════════════════
 function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
-  const ciclo=getCicloActual();
+  const ciclos=useMemo(()=>getCiclos(),[]);
+  const [cicloKey,setCicloKey]=useState(getCicloActual().key);
+  const ciclo=ciclos.find(c=>c.key===cicloKey)||ciclos[0];
   const [search,setSearch]=useState("");
   const [filter,setFilter]=useState("todos");
   const [verBajas,setVerBajas]=useState(false);
@@ -321,12 +323,17 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
 
   return (
     <div>
+      {/* Selector de ciclo */}
+      <select value={cicloKey} onChange={e=>setCicloKey(e.target.value)} style={{...INPUT_STYLE,fontWeight:700,fontSize:15,marginBottom:12}}>
+        {ciclos.map(c=><option key={c.key} value={c.key}>{c.label}{c.key===getCicloActual().key?" (actual)":""}</option>)}
+      </select>
+
       {/* Banner ciclo */}
       <div style={{background:`linear-gradient(135deg,${C.forest},${C.sage})`,borderRadius:16,padding:"14px 20px",marginBottom:16,color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
-          <div style={{fontSize:11,fontWeight:700,opacity:0.8,letterSpacing:"0.08em"}}>CICLO ACTIVO</div>
+          <div style={{fontSize:11,fontWeight:700,opacity:0.8,letterSpacing:"0.08em"}}>{cicloKey===getCicloActual().key?"CICLO ACTIVO":"CICLO HISTÓRICO"}</div>
           <div style={{fontSize:18,fontWeight:800}}>{ciclo.label}</div>
-          <div style={{fontSize:12,opacity:0.75}}>20/{ciclo.desde.getMonth()+1} — 19/{ciclo.hasta.getMonth()+1}</div>
+          <div style={{fontSize:12,opacity:0.75}}>25/{ciclo.desde.getMonth()+1} — 24/{ciclo.hasta.getMonth()+1}</div>
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:32,fontWeight:900}}>{pagados}<span style={{fontSize:16,opacity:0.7}}>/{activas.length}</span></div>
@@ -851,6 +858,8 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
   const [modalAdd,setModalAdd]=useState(false);
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({tipo:"ingreso",categoria:"cuota",descripcion:"",monto:"",fecha:"",metodo:"transferencia",destinatario:"",observaciones:""});
+  // auto-switch categoria default segun tipo
+  const handleTipoChange=(t)=>setForm(p=>({...p,tipo:t,categoria:t==="ingreso"?"cuota":"alquiler"}));
 
   const movsDelCiclo=movimientos.filter(m=>m.ciclo_key===cicloKey);
   const ingresos=movsDelCiclo.filter(m=>m.tipo==="ingreso").reduce((a,m)=>a+m.monto,0);
@@ -868,9 +877,30 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
   const porDest={};
   pagosDeCiclo.forEach(p=>{const d=p.destinatario||"Sin especificar";porDest[d]=(porDest[d]||0)+p.monto;});
 
-  const catColor={cuota:C.forest,encargo:"#5a9e8a",material:"#c0784a",sueldo:"#8070c0",otro:"#888"};
-  const catLabel={cuota:"Cuota",encargo:"Encargo",material:"Material",sueldo:"Sueldo",otro:"Otro"};
-  const addMov=async()=>{if(!form.descripcion.trim()||!form.monto)return;setSaving(true);await supabase.from("movimientos").insert({tipo:form.tipo,categoria:form.categoria,descripcion:form.descripcion,monto:Number(form.monto),fecha:form.fecha,metodo:form.metodo,destinatario:form.metodo==="transferencia"?form.destinatario:"",ciclo_key:cicloKey,observaciones:form.observaciones});await onRefresh();setSaving(false);setForm({tipo:"ingreso",categoria:"cuota",descripcion:"",monto:"",fecha:"",metodo:"transferencia",destinatario:"",observaciones:""});setModalAdd(false);};
+  const CATEGORIAS={
+    // Ingresos
+    cuota:      {label:"Cuota",        grupo:"ingreso", color:C.forest},
+    encargo:    {label:"Encargo",      grupo:"ingreso", color:"#5a9e8a"},
+    otro_ing:   {label:"Otro ingreso", grupo:"ingreso", color:"#888"},
+    // Gastos taller
+    alquiler:   {label:"Alquiler",     grupo:"taller",  color:"#c0784a"},
+    expensas:   {label:"Expensas",     grupo:"taller",  color:"#c0784a"},
+    sueldos:    {label:"Sueldos",      grupo:"taller",  color:"#8070c0"},
+    materiales: {label:"Materiales",   grupo:"taller",  color:"#e8945a"},
+    mercanderias:{label:"Mercaderías", grupo:"taller",  color:"#e8945a"},
+    // Gastos generales
+    prestamo_b: {label:"Préstamo bancario",  grupo:"general", color:"#5a7ec0"},
+    prestamo_f: {label:"Préstamo familiar",  grupo:"general", color:"#5a7ec0"},
+    tarjeta_nx: {label:"Tarjeta NX",         grupo:"general", color:"#5a7ec0"},
+    tarjeta_visa:{label:"Tarjeta VISA",      grupo:"general", color:"#5a7ec0"},
+    luz:        {label:"Luz",                grupo:"general", color:"#c0a020"},
+    gas:        {label:"Gas",                grupo:"general", color:"#c0a020"},
+    ocio:       {label:"Ocio",               grupo:"general", color:"#888"},
+    otros:      {label:"Otros",              grupo:"general", color:"#888"},
+  };
+  const catColor=Object.fromEntries(Object.entries(CATEGORIAS).map(([k,v])=>[k,v.color]));
+  const catLabel=Object.fromEntries(Object.entries(CATEGORIAS).map(([k,v])=>[k,v.label]));
+  const addMov=async()=>{if(!form.descripcion.trim()||!form.monto)return;setSaving(true);await supabase.from("movimientos").insert({tipo:form.tipo,categoria:form.categoria,descripcion:form.descripcion,monto:Number(form.monto),fecha:form.fecha,metodo:form.metodo,destinatario:form.metodo==="transferencia"?form.destinatario:"",ciclo_key:cicloKey,observaciones:form.observaciones});await onRefresh();setSaving(false);setForm({tipo:"ingreso",categoria:"cuota",descripcion:"",monto:"",fecha:"",metodo:"transferencia",destinatario:"",observaciones:""});setModalAdd(false);}; 
   const delMov=async(id)=>{await supabase.from("movimientos").delete().eq("id",id);await onRefresh();};
 
   return (
@@ -904,6 +934,22 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
           </div>
         </div>
       )}
+
+      {/* Resumen gastos por grupo */}
+      {(()=>{
+        const tallerTotal=movsDelCiclo.filter(m=>m.tipo==="gasto"&&CATEGORIAS[m.categoria]?.grupo==="taller").reduce((s,m)=>s+m.monto,0);
+        const generalTotal=movsDelCiclo.filter(m=>m.tipo==="gasto"&&CATEGORIAS[m.categoria]?.grupo==="general").reduce((s,m)=>s+m.monto,0);
+        if(tallerTotal===0&&generalTotal===0)return null;
+        return(
+          <div style={{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:10}}>Gastos por categoría</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {tallerTotal>0&&<div style={{background:"#fff3ee",borderRadius:12,padding:"12px 14px"}}><div style={{fontSize:12,fontWeight:700,color:"#c0784a",marginBottom:2}}>GASTOS DEL TALLER</div><div style={{fontSize:18,fontWeight:900,color:"#c0784a"}}>{formatPeso(tallerTotal)}</div></div>}
+              {generalTotal>0&&<div style={{background:"#f0f4ff",borderRadius:12,padding:"12px 14px"}}><div style={{fontSize:12,fontWeight:700,color:"#5a7ec0",marginBottom:2}}>GASTOS GENERALES</div><div style={{fontSize:18,fontWeight:900,color:"#5a7ec0"}}>{formatPeso(generalTotal)}</div></div>}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{background:"white",borderRadius:14,padding:"16px",marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
         <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:12}}>Cuotas — {cicloActual.label}</div>
@@ -960,10 +1006,36 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
       <FAB onClick={()=>setModalAdd(true)}/>
       <Modal open={modalAdd} onClose={()=>setModalAdd(false)} title="Nuevo movimiento">
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-          {["ingreso","gasto"].map(t=>(<button key={t} onClick={()=>setForm(p=>({...p,tipo:t}))} style={{padding:"11px",borderRadius:12,border:`2px solid ${form.tipo===t?(t==="ingreso"?C.forest:"#c0784a"):"#e0e0e0"}`,background:form.tipo===t?(t==="ingreso"?"#e8f5e9":"#fdecea"):"white",color:form.tipo===t?(t==="ingreso"?C.forest:"#c0784a"):"#aaa",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>{t==="ingreso"?"↑ Ingreso":"↓ Gasto"}</button>))}
+          {["ingreso","gasto"].map(t=>(<button key={t} onClick={()=>handleTipoChange(t)} style={{padding:"11px",borderRadius:12,border:`2px solid ${form.tipo===t?(t==="ingreso"?C.forest:"#c0784a"):"#e0e0e0"}`,background:form.tipo===t?(t==="ingreso"?"#e8f5e9":"#fdecea"):"white",color:form.tipo===t?(t==="ingreso"?C.forest:"#c0784a"):"#aaa",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>{t==="ingreso"?"↑ Ingreso":"↓ Gasto"}</button>))}
         </div>
-        <Sel label="Categoría" value={form.categoria} onChange={e=>setForm(p=>({...p,categoria:e.target.value}))}>{Object.entries(catLabel).map(([k,v])=><option key={k} value={k}>{v}</option>)}</Sel>
-        <Input label="Descripción" value={form.descripcion} onChange={e=>setForm(p=>({...p,descripcion:e.target.value}))} placeholder="Detalle"/>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:12,fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:5}}>Categoría</label>
+          <select value={form.categoria} onChange={e=>setForm(p=>({...p,categoria:e.target.value}))} style={{...INPUT_STYLE}}>
+            <optgroup label="── Ingresos">
+              <option value="cuota">Cuota</option>
+              <option value="encargo">Encargo</option>
+              <option value="otro_ing">Otro ingreso</option>
+            </optgroup>
+            <optgroup label="── Gastos del taller">
+              <option value="alquiler">Alquiler</option>
+              <option value="expensas">Expensas</option>
+              <option value="sueldos">Sueldos</option>
+              <option value="materiales">Materiales</option>
+              <option value="mercanderias">Mercaderías</option>
+            </optgroup>
+            <optgroup label="── Gastos generales">
+              <option value="prestamo_b">Préstamo bancario</option>
+              <option value="prestamo_f">Préstamo familiar</option>
+              <option value="tarjeta_nx">Tarjeta NX</option>
+              <option value="tarjeta_visa">Tarjeta VISA</option>
+              <option value="luz">Luz</option>
+              <option value="gas">Gas</option>
+              <option value="ocio">Ocio</option>
+              <option value="otros">Otros</option>
+            </optgroup>
+          </select>
+        </div>
+        <Input label="Descripción / Comentario" value={form.descripcion} onChange={e=>setForm(p=>({...p,descripcion:e.target.value}))} placeholder="Detalle del movimiento"/>
         <Input label="Monto ($)" type="number" value={form.monto} onChange={e=>setForm(p=>({...p,monto:e.target.value}))}/>
         <Input label="Fecha" type="date" value={form.fecha} onChange={e=>setForm(p=>({...p,fecha:e.target.value}))}/>
         <Sel label="Método" value={form.metodo} onChange={e=>setForm(p=>({...p,metodo:e.target.value,destinatario:""}))}>
