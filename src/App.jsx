@@ -231,7 +231,7 @@ function PhotoPicker({value,onChange}) {
 // ══════════════════════════════════════════════════════════════════════════
 // ALUMNAS
 // ══════════════════════════════════════════════════════════════════════════
-function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
+function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet,rol}) {
   const ciclos=useMemo(()=>getCiclos(),[]);
   const [cicloKey,setCicloKey]=useState(getCicloActual().key);
   const ciclo=ciclos.find(c=>c.key===cicloKey)||ciclos[0];
@@ -376,11 +376,11 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
         <button onClick={()=>setVerBajas(true)} style={{flex:1,padding:"9px",borderRadius:10,border:`2px solid ${verBajas?"#aaa":"#e0e0e0"}`,background:verBajas?"#f0f0f0":"white",color:verBajas?"#666":"#aaa",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Bajas ({bajas.length})</button>
       </div>
 
-      {/* Exportar */}
-      <div style={{display:"flex",gap:8,marginBottom:14}}>
+      {/* Exportar — solo admin */}
+      {rol==="admin"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
         <button onClick={()=>exportAlumnas(alumnos,pagos,turnos)} style={{flex:1,background:"#e8f5e9",border:"none",borderRadius:10,padding:"9px",fontSize:12,fontWeight:700,color:C.forest,cursor:"pointer",fontFamily:"inherit"}}>📥 Exportar alumnas</button>
         <button onClick={()=>exportPagos(pagos,alumnos)} style={{flex:1,background:"#e8f5e9",border:"none",borderRadius:10,padding:"9px",fontSize:12,fontWeight:700,color:C.forest,cursor:"pointer",fontFamily:"inherit"}}>📥 Exportar pagos</button>
-      </div>
+      </div>}
 
       {/* Lista */}
       <div style={{display:"grid",gridTemplateColumns:tablet?"1fr 1fr":"1fr",gap:10,marginBottom:100}}>
@@ -402,7 +402,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
         })}
       </div>
 
-      <FAB onClick={()=>setModalAdd(true)}/>
+      {rol==="admin"&&<FAB onClick={()=>setModalAdd(true)}/>}
 
       {/* DETALLE */}
       <Modal open={!!modalDet} onClose={()=>setModalDet(null)} title="Detalle alumna">
@@ -430,12 +430,12 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
               {modalDet.activa!==false&&(
                 <div style={{background:pago?"#e8f5e9":"#fdecea",borderRadius:14,padding:16,marginBottom:16}}>
                   <div style={{fontWeight:700,color:pago?"#388e3c":"#c62828",fontSize:15,marginBottom:pago?8:0}}>{pago?"✓ Pago "+ciclo.label:"⚠ Pendiente — "+ciclo.label}</div>
-                  {pago&&(<><Row label="Monto" value={formatPeso(pago.monto)}/><Row label="Fecha" value={formatDate(pago.fecha)}/><Row label="Método" value={pago.metodo}/>{pago.destinatario&&<Row label="Destinatario" value={pago.destinatario}/>}{pago.items?.length>0&&<Row label="Extras" value={itemsLabel(pago.items)}/>}{pago.observaciones&&<div style={{marginTop:8,fontSize:13,color:"#555",fontStyle:"italic"}}>"{pago.observaciones}"</div>}</>)}
+                  {pago&&rol==="admin"&&(<><Row label="Monto" value={formatPeso(pago.monto)}/><Row label="Fecha" value={formatDate(pago.fecha)}/><Row label="Método" value={pago.metodo}/>{pago.destinatario&&<Row label="Destinatario" value={pago.destinatario}/>}{pago.items?.length>0&&<Row label="Extras" value={itemsLabel(pago.items)}/>}{pago.observaciones&&<div style={{marginTop:8,fontSize:13,color:"#555",fontStyle:"italic"}}>"{pago.observaciones}"</div>}</>)}
                 </div>
               )}
 
-              {/* Historial de pagos */}
-              {historial.length>0&&(
+              {/* Historial de pagos — solo admin */}
+              {rol==="admin"&&historial.length>0&&(
                 <div style={{marginBottom:16}}>
                   <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:10}}>Historial de pagos ({historial.length} ciclos)</div>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -457,14 +457,15 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet}) {
                 </div>
               )}
 
-              {/* Acciones */}
-              {modalDet.activa!==false?(
+              {/* Acciones — solo admin */}
+              {rol==="admin"&&modalDet.activa!==false&&(
                 <>
                   {!pago?<Btn onClick={()=>{setModalDet(null);setModalPago(modalDet);}}>✓ Registrar pago {ciclo.label}</Btn>:<Btn onClick={()=>quitarPago(modalDet.id)} variant="secondary" disabled={saving}>Quitar pago del ciclo</Btn>}
                   <Btn onClick={()=>{setEditForm({nombre:modalDet.nombre,turnoId:modalDet.turno_id||"",arcilla:modalDet.arcilla,celular:modalDet.celular||"",cumple:modalDet.cumple||""});setModalEdit(modalDet);}} variant="secondary" style={{marginTop:8}}>✏️ Editar datos</Btn>
                   <Btn onClick={()=>{setBajaForm({fecha_baja:new Date().toISOString().split("T")[0],motivo_baja:""});setModalBaja(modalDet);}} variant="secondary" style={{marginTop:8,color:"#c0784a",border:"2px solid #e0d0c0",background:"#fff8f5"}}>🔴 Dar de baja</Btn>
                 </>
-              ):(
+              )}
+              {rol==="admin"&&modalDet.activa===false&&(
                 <Btn onClick={()=>reactivar(modalDet.id)} disabled={saving}>🟢 Reactivar alumna</Btn>
               )}
             </div>
@@ -859,7 +860,7 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
   const [saving,setSaving]=useState(false);
   const [form,setForm]=useState({tipo:"ingreso",categoria:"cuota",descripcion:"",monto:"",fecha:"",metodo:"transferencia",destinatario:"",observaciones:""});
   // auto-switch categoria default segun tipo
-  const handleTipoChange=(t)=>setForm(p=>({...p,tipo:t,categoria:t==="ingreso"?"cuota":"alquiler"}));
+  const handleTipoChange=(t)=>setForm(p=>({...p,tipo:t,categoria:t==="ingreso"?"cuota":"t_alquiler"}));
 
   const movsDelCiclo=movimientos.filter(m=>m.ciclo_key===cicloKey);
   const ingresos=movsDelCiclo.filter(m=>m.tipo==="ingreso").reduce((a,m)=>a+m.monto,0);
@@ -879,27 +880,45 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
 
   const CATEGORIAS={
     // Ingresos
-    cuota:      {label:"Cuota",        grupo:"ingreso", color:C.forest},
-    encargo:    {label:"Encargo",      grupo:"ingreso", color:"#5a9e8a"},
-    otro_ing:   {label:"Otro ingreso", grupo:"ingreso", color:"#888"},
-    // Gastos taller
-    alquiler:   {label:"Alquiler",     grupo:"taller",  color:"#c0784a"},
-    expensas:   {label:"Expensas",     grupo:"taller",  color:"#c0784a"},
-    sueldos:    {label:"Sueldos",      grupo:"taller",  color:"#8070c0"},
-    materiales: {label:"Materiales",   grupo:"taller",  color:"#e8945a"},
-    mercanderias:{label:"Mercaderías", grupo:"taller",  color:"#e8945a"},
-    // Gastos generales
-    prestamo_b: {label:"Préstamo bancario",  grupo:"general", color:"#5a7ec0"},
-    prestamo_f: {label:"Préstamo familiar",  grupo:"general", color:"#5a7ec0"},
-    tarjeta_nx: {label:"Tarjeta NX",         grupo:"general", color:"#5a7ec0"},
-    tarjeta_visa:{label:"Tarjeta VISA",      grupo:"general", color:"#5a7ec0"},
-    luz:        {label:"Luz",                grupo:"general", color:"#c0a020"},
-    gas:        {label:"Gas",                grupo:"general", color:"#c0a020"},
-    ocio:       {label:"Ocio",               grupo:"general", color:"#888"},
-    otros:      {label:"Otros",              grupo:"general", color:"#888"},
+    cuota:          {label:"Cuota",              grupo:"ingreso",  color:C.forest},
+    encargo:        {label:"Encargo",            grupo:"ingreso",  color:"#5a9e8a"},
+    otro_ing:       {label:"Otro ingreso",       grupo:"ingreso",  color:"#888"},
+    // Taller
+    t_alquiler:     {label:"Alquiler taller",    grupo:"taller",   color:"#c0784a"},
+    t_expensas:     {label:"Expensas taller",    grupo:"taller",   color:"#c0784a"},
+    t_luz:          {label:"Luz",                grupo:"taller",   color:"#c0784a"},
+    t_agua:         {label:"Agua",               grupo:"taller",   color:"#c0784a"},
+    t_gas:          {label:"Gas",                grupo:"taller",   color:"#c0784a"},
+    t_retributivos: {label:"Retributivos",       grupo:"taller",   color:"#8070c0"},
+    t_materiales:   {label:"Materiales",         grupo:"taller",   color:"#c0784a"},
+    t_insumos:      {label:"Insumos",            grupo:"taller",   color:"#c0784a"},
+    t_equipamento:  {label:"Equipamiento",       grupo:"taller",   color:"#c0784a"},
+    t_prestamo_b:   {label:"Préstamo bancario",  grupo:"taller",   color:"#5a7ec0"},
+    t_prestamo_f:   {label:"Préstamo familiar",  grupo:"taller",   color:"#5a7ec0"},
+    t_internet:     {label:"Internet",           grupo:"taller",   color:"#c0784a"},
+    t_otros:        {label:"Otros taller",       grupo:"taller",   color:"#888"},
+    // Casa
+    c_alquiler:     {label:"Alquiler",           grupo:"casa",     color:"#5a7ec0"},
+    c_impuestos:    {label:"Impuestos",          grupo:"casa",     color:"#5a7ec0"},
+    c_tarjeta_visa: {label:"Tarjeta Visa",       grupo:"casa",     color:"#5a7ec0"},
+    c_tarjeta_nx:   {label:"Tarjeta Naranja",    grupo:"casa",     color:"#5a7ec0"},
+    c_mercaderias:  {label:"Mercaderías",        grupo:"casa",     color:"#5a7ec0"},
+    c_mantenimiento:{label:"Mantenimiento",      grupo:"casa",     color:"#5a7ec0"},
+    c_indumentaria: {label:"Indumentaria",       grupo:"casa",     color:"#5a7ec0"},
+    c_internet:     {label:"Internet",           grupo:"casa",     color:"#5a7ec0"},
+    c_salud:        {label:"Salud",              grupo:"casa",     color:"#5a7ec0"},
+    c_otros:        {label:"Otros casa",         grupo:"casa",     color:"#888"},
+    // Personal
+    p_ocio:         {label:"Ocio",               grupo:"personal", color:"#9070c0"},
+    p_gustos:       {label:"Gustos",             grupo:"personal", color:"#9070c0"},
+    p_otros:        {label:"Otros personales",   grupo:"personal", color:"#888"},
+    // Otros
+    no_registrado:  {label:"No registrado",      grupo:"otros",    color:"#bbb"},
   };
   const catColor=Object.fromEntries(Object.entries(CATEGORIAS).map(([k,v])=>[k,v.color]));
   const catLabel=Object.fromEntries(Object.entries(CATEGORIAS).map(([k,v])=>[k,v.label]));
+  const grupoColor={taller:"#c0784a",casa:"#5a7ec0",personal:"#9070c0",otros:"#bbb",ingreso:C.forest};
+  const grupoLabel={taller:"Taller",casa:"Casa",personal:"Personal",otros:"Otros",ingreso:"Ingresos"};
   const addMov=async()=>{if(!form.descripcion.trim()||!form.monto)return;setSaving(true);await supabase.from("movimientos").insert({tipo:form.tipo,categoria:form.categoria,descripcion:form.descripcion,monto:Number(form.monto),fecha:form.fecha,metodo:form.metodo,destinatario:form.metodo==="transferencia"?form.destinatario:"",ciclo_key:cicloKey,observaciones:form.observaciones});await onRefresh();setSaving(false);setForm({tipo:"ingreso",categoria:"cuota",descripcion:"",monto:"",fecha:"",metodo:"transferencia",destinatario:"",observaciones:""});setModalAdd(false);}; 
   const delMov=async(id)=>{await supabase.from("movimientos").delete().eq("id",id);await onRefresh();};
 
@@ -937,15 +956,23 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
 
       {/* Resumen gastos por grupo */}
       {(()=>{
-        const tallerTotal=movsDelCiclo.filter(m=>m.tipo==="gasto"&&CATEGORIAS[m.categoria]?.grupo==="taller").reduce((s,m)=>s+m.monto,0);
-        const generalTotal=movsDelCiclo.filter(m=>m.tipo==="gasto"&&CATEGORIAS[m.categoria]?.grupo==="general").reduce((s,m)=>s+m.monto,0);
-        if(tallerTotal===0&&generalTotal===0)return null;
+        const grupos=["taller","casa","personal","otros"];
+        const totales=grupos.map(g=>({
+          g,
+          total:movsDelCiclo.filter(m=>m.tipo==="gasto"&&CATEGORIAS[m.categoria]?.grupo===g).reduce((s,m)=>s+m.monto,0)
+        })).filter(x=>x.total>0);
+        if(totales.length===0)return null;
+        const bgColor={taller:"#fff3ee",casa:"#f0f4ff",personal:"#f5f0ff",otros:"#f5f5f5"};
         return(
           <div style={{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:14,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
             <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:10}}>Gastos por categoría</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {tallerTotal>0&&<div style={{background:"#fff3ee",borderRadius:12,padding:"12px 14px"}}><div style={{fontSize:12,fontWeight:700,color:"#c0784a",marginBottom:2}}>GASTOS DEL TALLER</div><div style={{fontSize:18,fontWeight:900,color:"#c0784a"}}>{formatPeso(tallerTotal)}</div></div>}
-              {generalTotal>0&&<div style={{background:"#f0f4ff",borderRadius:12,padding:"12px 14px"}}><div style={{fontSize:12,fontWeight:700,color:"#5a7ec0",marginBottom:2}}>GASTOS GENERALES</div><div style={{fontSize:18,fontWeight:900,color:"#5a7ec0"}}>{formatPeso(generalTotal)}</div></div>}
+            <div style={{display:"grid",gridTemplateColumns:tablet?"1fr 1fr 1fr 1fr":"1fr 1fr",gap:8}}>
+              {totales.map(({g,total})=>(
+                <div key={g} style={{background:bgColor[g],borderRadius:12,padding:"12px 14px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:grupoColor[g],marginBottom:2}}>{grupoLabel[g].toUpperCase()}</div>
+                  <div style={{fontSize:18,fontWeight:900,color:grupoColor[g]}}>{formatPeso(total)}</div>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -1016,22 +1043,40 @@ function FinanzasTab({alumnos,pagos,encargos,movimientos,onRefresh,tablet}) {
               <option value="encargo">Encargo</option>
               <option value="otro_ing">Otro ingreso</option>
             </optgroup>
-            <optgroup label="── Gastos del taller">
-              <option value="alquiler">Alquiler</option>
-              <option value="expensas">Expensas</option>
-              <option value="sueldos">Sueldos</option>
-              <option value="materiales">Materiales</option>
-              <option value="mercanderias">Mercaderías</option>
+            <optgroup label="── Taller">
+              <option value="t_alquiler">Alquiler taller</option>
+              <option value="t_expensas">Expensas taller</option>
+              <option value="t_luz">Luz</option>
+              <option value="t_agua">Agua</option>
+              <option value="t_gas">Gas</option>
+              <option value="t_retributivos">Retributivos</option>
+              <option value="t_materiales">Materiales</option>
+              <option value="t_insumos">Insumos</option>
+              <option value="t_equipamento">Equipamiento</option>
+              <option value="t_prestamo_b">Préstamo bancario</option>
+              <option value="t_prestamo_f">Préstamo familiar</option>
+              <option value="t_internet">Internet</option>
+              <option value="t_otros">Otros taller</option>
             </optgroup>
-            <optgroup label="── Gastos generales">
-              <option value="prestamo_b">Préstamo bancario</option>
-              <option value="prestamo_f">Préstamo familiar</option>
-              <option value="tarjeta_nx">Tarjeta NX</option>
-              <option value="tarjeta_visa">Tarjeta VISA</option>
-              <option value="luz">Luz</option>
-              <option value="gas">Gas</option>
-              <option value="ocio">Ocio</option>
-              <option value="otros">Otros</option>
+            <optgroup label="── Casa">
+              <option value="c_alquiler">Alquiler</option>
+              <option value="c_impuestos">Impuestos</option>
+              <option value="c_tarjeta_visa">Tarjeta Visa</option>
+              <option value="c_tarjeta_nx">Tarjeta Naranja</option>
+              <option value="c_mercaderias">Mercaderías</option>
+              <option value="c_mantenimiento">Mantenimiento</option>
+              <option value="c_indumentaria">Indumentaria</option>
+              <option value="c_internet">Internet</option>
+              <option value="c_salud">Salud</option>
+              <option value="c_otros">Otros casa</option>
+            </optgroup>
+            <optgroup label="── Personal">
+              <option value="p_ocio">Ocio</option>
+              <option value="p_gustos">Gustos</option>
+              <option value="p_otros">Otros personales</option>
+            </optgroup>
+            <optgroup label="── Otros">
+              <option value="no_registrado">No registrado</option>
             </optgroup>
           </select>
         </div>
@@ -1108,15 +1153,23 @@ export default function EucaliptaApp() {
   const [data,setData]=useState({alumnos:[],turnos:[],encargos:[],horneadas:[],pagos:[],movimientos:[]});
   const tablet=useIsTablet();
 
+  const [rol,setRol]=useState(null); // 'admin' | 'profe'
+
+  const loadRol=async(session)=>{
+    if(!session)return;
+    const {data}=await supabase.from("user_roles").select("rol").eq("user_id",session.user.id).single();
+    setRol(data?.rol||"profe");
+  };
+
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
       setSession(session);
-      if(session)loadAll();
+      if(session){loadRol(session);loadAll();}
       else setLoading(false);
     });
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_,sess)=>{
       setSession(sess);
-      if(sess)loadAll();
+      if(sess){loadRol(sess);loadAll();}
       else setLoading(false);
     });
     return ()=>subscription.unsubscribe();
@@ -1154,8 +1207,9 @@ export default function EucaliptaApp() {
           <div style={{fontSize:17,fontWeight:900,color:C.dark,lineHeight:1}}>Eucalipta</div>
           <div style={{fontSize:9,letterSpacing:"0.12em",color:C.forest,fontWeight:700,textTransform:"uppercase"}}>Taller de Cerámica</div>
         </div>
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
           <div style={{fontSize:14,fontWeight:700,color:C.forest}}>{titulos[tab]}</div>
+          {rol&&<div style={{fontSize:11,fontWeight:700,background:rol==="admin"?"#e8f5e9":"#f0f4ff",color:rol==="admin"?C.forest:"#5a7ec0",borderRadius:6,padding:"3px 8px"}}>{rol==="admin"?"Admin":"Profe"}</div>}
           <button onClick={handleLogout} title="Cerrar sesión" style={{background:"none",border:"1.5px solid #e0e0e0",borderRadius:8,padding:"5px 10px",fontSize:12,color:"#aaa",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Salir</button>
         </div>
       </div>
@@ -1163,7 +1217,7 @@ export default function EucaliptaApp() {
       <div style={{display:"flex",flex:1}}>
         {tablet&&(
           <div style={{width:200,flexShrink:0,background:"white",borderRight:"1px solid #f0ece6",padding:"20px 0",display:"flex",flexDirection:"column",gap:4,position:"sticky",top:57,height:"calc(100vh - 57px)",overflowY:"auto"}}>
-            {TABS.map(t=>{const Icon=icons[t.id];return(
+            {TABS.filter(t=>!(t.id==="finanzas"&&rol==="profe")).map(t=>{const Icon=icons[t.id];return(
               <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 20px",background:tab===t.id?"#e8f5e9":"none",border:"none",cursor:"pointer",color:tab===t.id?C.forest:"#bbb",fontFamily:"inherit",textAlign:"left",borderLeft:`3px solid ${tab===t.id?C.forest:"transparent"}`,fontWeight:tab===t.id?700:500,fontSize:14}}>
                 <Icon/> {t.label}
               </button>
@@ -1182,7 +1236,7 @@ export default function EucaliptaApp() {
 
       {!tablet&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:"1px solid #f0ece6",display:"flex",zIndex:40}}>
-          {TABS.map(t=>{const Icon=icons[t.id];return(
+          {TABS.filter(t=>!(t.id==="finanzas"&&rol==="profe")).map(t=>{const Icon=icons[t.id];return(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 0 8px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:tab===t.id?C.forest:"#ccc",fontFamily:"inherit"}}>
               <Icon/><span style={{fontSize:9,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase"}}>{t.label}</span>
               {tab===t.id&&<div style={{width:4,height:4,borderRadius:"50%",background:C.forest}}/>}
