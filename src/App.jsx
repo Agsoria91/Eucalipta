@@ -1155,11 +1155,12 @@ export default function EucaliptaApp() {
 
   const [rol,setRol]=useState(null); // 'admin' | 'profe'
 
-  const loadRol=async(session)=>{
-    if(!session)return;
-    const {data}=await supabase.from("user_roles").select("rol").eq("user_id",session.user.id).single();
-    setRol(data?.rol||"profe");
-  };
+  const loadRol = async (session) => {
+    if (!session) return;
+    const { data, error } = await supabase.from("user_roles").select("rol").eq("user_id",        session.user.id).single();
+    console.log("ROL CARGADO:", data, "ERROR:", error); // línea temporal
+    setRol(data?.rol || "profe");
+    };
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
