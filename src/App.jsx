@@ -377,7 +377,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet,rol}) {
       </div>
 
       {/* Exportar — solo admin */}
-      {rol==="admin"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+      {(rol==="admin"||rol===null)&&<div style={{display:"flex",gap:8,marginBottom:14}}>
         <button onClick={()=>exportAlumnas(alumnos,pagos,turnos)} style={{flex:1,background:"#e8f5e9",border:"none",borderRadius:10,padding:"9px",fontSize:12,fontWeight:700,color:C.forest,cursor:"pointer",fontFamily:"inherit"}}>📥 Exportar alumnas</button>
         <button onClick={()=>exportPagos(pagos,alumnos)} style={{flex:1,background:"#e8f5e9",border:"none",borderRadius:10,padding:"9px",fontSize:12,fontWeight:700,color:C.forest,cursor:"pointer",fontFamily:"inherit"}}>📥 Exportar pagos</button>
       </div>}
@@ -402,7 +402,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet,rol}) {
         })}
       </div>
 
-      {rol==="admin"&&<FAB onClick={()=>setModalAdd(true)}/>}
+      {(rol==="admin"||rol===null)&&<FAB onClick={()=>setModalAdd(true)}/>}
 
       {/* DETALLE */}
       <Modal open={!!modalDet} onClose={()=>setModalDet(null)} title="Detalle alumna">
@@ -435,7 +435,7 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet,rol}) {
               )}
 
               {/* Historial de pagos — solo admin */}
-              {rol==="admin"&&historial.length>0&&(
+              {(rol==="admin"||rol===null)&&historial.length>0&&(
                 <div style={{marginBottom:16}}>
                   <div style={{fontSize:12,fontWeight:800,color:"#aaa",textTransform:"uppercase",marginBottom:10}}>Historial de pagos ({historial.length} ciclos)</div>
                   <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -458,14 +458,14 @@ function AlumnosTab({alumnos,pagos,turnos,onRefresh,tablet,rol}) {
               )}
 
               {/* Acciones — solo admin */}
-              {rol==="admin"&&modalDet.activa!==false&&(
+              {(rol==="admin"||rol===null)&&modalDet.activa!==false&&(
                 <>
                   {!pago?<Btn onClick={()=>{setModalDet(null);setModalPago(modalDet);}}>✓ Registrar pago {ciclo.label}</Btn>:<Btn onClick={()=>quitarPago(modalDet.id)} variant="secondary" disabled={saving}>Quitar pago del ciclo</Btn>}
                   <Btn onClick={()=>{setEditForm({nombre:modalDet.nombre,turnoId:modalDet.turno_id||"",arcilla:modalDet.arcilla,celular:modalDet.celular||"",cumple:modalDet.cumple||""});setModalEdit(modalDet);}} variant="secondary" style={{marginTop:8}}>✏️ Editar datos</Btn>
                   <Btn onClick={()=>{setBajaForm({fecha_baja:new Date().toISOString().split("T")[0],motivo_baja:""});setModalBaja(modalDet);}} variant="secondary" style={{marginTop:8,color:"#c0784a",border:"2px solid #e0d0c0",background:"#fff8f5"}}>🔴 Dar de baja</Btn>
                 </>
               )}
-              {rol==="admin"&&modalDet.activa===false&&(
+              {(rol==="admin"||rol===null)&&modalDet.activa===false&&(
                 <Btn onClick={()=>reactivar(modalDet.id)} disabled={saving}>🟢 Reactivar alumna</Btn>
               )}
             </div>
