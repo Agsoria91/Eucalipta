@@ -1227,7 +1227,7 @@ export default function EucaliptaApp() {
         )}
 
         <div style={{flex:1,padding:tablet?"20px 24px":"14px 14px 0",maxWidth:tablet?900:480,margin:"0 auto",width:"100%"}}>
-          {tab==="alumnos"  &&<AlumnosTab  alumnos={data.alumnos} pagos={data.pagos} turnos={data.turnos} onRefresh={loadAll} tablet={tablet}/>}
+          {tab==="alumnos"  &&<AlumnosTab  alumnos={data.alumnos} pagos={data.pagos} turnos={data.turnos} onRefresh={loadAll} tablet={tablet} rol={rol}/>}
           {tab==="turnos"   &&<TurnosTab   turnos={data.turnos} alumnos={data.alumnos} onRefresh={loadAll} tablet={tablet}/>}
           {tab==="encargos" &&<EncargosTab encargos={data.encargos} onRefresh={loadAll} tablet={tablet}/>}
           {tab==="horno"    &&<HornoTab    horneadas={data.horneadas} alumnos={data.alumnos} onRefresh={loadAll} tablet={tablet}/>}
