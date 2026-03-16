@@ -1153,7 +1153,7 @@ export default function EucaliptaApp() {
   const [data,setData]=useState({alumnos:[],turnos:[],encargos:[],horneadas:[],pagos:[],movimientos:[]});
   const tablet=useIsTablet();
 
-  const [rol,setRol]=useState(null); // 'admin' | 'profe'
+  const [rol, setRol] = useState("admin"); // 'admin' | 'profe'
 
   const loadRol = async (session) => {
     if (!session) return;
